@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: realm_agent_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  elixir-backend:
+    build:
+      context: ./backend-elixir
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ecto://postgres:postgres@postgres/realm_agent_dev
+      BLIZZARD_CLIENT_ID: ${BLIZZARD_CLIENT_ID}
+      BLIZZARD_CLIENT_SECRET: ${BLIZZARD_CLIENT_SECRET}
+      NODE_SERVICE_URL: http://node-backend:3000
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-supersecretkeythatisatleast64characterslong1234567890abc}
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend-elixir:/app
+    command: mix phx.server
+
+  node-backend:
+    build:
+      context: ./backend-node
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3000
+      FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend-node:/app
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro
+    command: npm start
+
+volumes:
+  postgres_data:
