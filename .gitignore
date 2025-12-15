@@ -2,3 +2,13 @@
 firebase-service-account.json
 *.log
 .DS_Store
+
+# Firebase credentials (sensitive)
+firebase-service-account.json
+mobile-android/android/app/google-services.json
+backend-node/firebase-service-account.json
+
+# Environment files with secrets
+.env
+backend-elixir/.env
+backend-node/.env
