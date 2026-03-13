@@ -1,6 +1,6 @@
 defmodule RealmAgent.Monitor.StatusChecker do
   @moduledoc """
-  GenServer que faz polling periódico dos connected realms e detecta mudanças de status.
+  GenServer that periodically polls connected realms and detects status changes.
   """
   use GenServer
   require Logger
@@ -11,8 +11,6 @@ defmodule RealmAgent.Monitor.StatusChecker do
   alias RealmAgent.Repo
   alias RealmAgent.Push.Notifier
 
-  import Ecto.Query
-
   @poll_interval_ms String.to_integer(System.get_env("POLL_INTERVAL_SECONDS", "60")) * 1000
   @region System.get_env("WOW_REGION", "us")
 
@@ -22,7 +20,7 @@ defmodule RealmAgent.Monitor.StatusChecker do
 
   @impl true
   def init(_opts) do
-    Logger.info("StatusChecker iniciado. Polling a cada #{@poll_interval_ms}ms")
+    Logger.info("StatusChecker started. Polling every #{@poll_interval_ms}ms")
     schedule_check()
     {:ok, %{}}
   end
@@ -39,28 +37,36 @@ defmodule RealmAgent.Monitor.StatusChecker do
   end
 
   defp check_all_realms do
-    Logger.info("Iniciando verificação de status dos reinos...")
+    Logger.info("Starting realm status check...")
 
     case Client.get_connected_realms(@region) do
       {:ok, realms} ->
-        Logger.info("Encontrados #{length(realms)} connected realms")
-
-        changes =
+        realm_ids =
           realms
           |> Enum.map(fn %{"href" => href} -> extract_realm_id(href) end)
           |> Enum.filter(& &1)
-          |> Enum.map(&check_realm_status/1)
-          |> Enum.filter(&(&1 != nil))
+
+        Logger.info("Found #{length(realm_ids)} connected realms")
+
+        # Load all existing realms from DB in a single query
+        existing_by_id =
+          Repo.all(ConnectedRealm)
+          |> Map.new(&{&1.blizzard_id, &1})
+
+        changes =
+          realm_ids
+          |> Enum.map(&check_realm_status(&1, existing_by_id))
+          |> Enum.filter(& &1)
 
         if length(changes) > 0 do
-          Logger.info("Detectadas #{length(changes)} mudanças de status")
+          Logger.info("Detected #{length(changes)} status changes")
           process_changes(changes)
         else
-          Logger.debug("Nenhuma mudança detectada")
+          Logger.debug("No changes detected")
         end
 
       {:error, reason} ->
-        Logger.error("Erro ao buscar connected realms: #{inspect(reason)}")
+        Logger.error("Error fetching connected realms: #{inspect(reason)}")
     end
   end
 
@@ -71,30 +77,27 @@ defmodule RealmAgent.Monitor.StatusChecker do
     end
   end
 
-  defp check_realm_status(realm_id) do
+  defp check_realm_status(realm_id, existing_by_id) do
     case Client.get_realm_status(realm_id, @region) do
       {:ok, %{id: id, is_up: is_up, name: name}} ->
-        existing = Repo.get_by(ConnectedRealm, blizzard_id: id)
+        existing = Map.get(existing_by_id, id)
 
         cond do
-          # Primeiro registro deste realm
           is_nil(existing) ->
             create_realm(id, name, is_up)
             nil
 
-          # Status mudou
           existing.is_up != is_up ->
-            Logger.info("Status mudou: #{name} (#{id}) -> #{if is_up, do: "UP", else: "DOWN"}")
+            Logger.info("Status changed: #{name} (#{id}) -> #{if is_up, do: "UP", else: "DOWN"}")
             update_realm(existing, is_up)
             %{id: id, name: name, old_status: existing.is_up, new_status: is_up}
 
-          # Sem mudança
           true ->
             nil
         end
 
       {:error, reason} ->
-        Logger.warning("Erro ao verificar realm #{realm_id}: #{inspect(reason)}")
+        Logger.warning("Error checking realm #{realm_id}: #{inspect(reason)}")
         nil
     end
   end
@@ -121,19 +124,15 @@ defmodule RealmAgent.Monitor.StatusChecker do
   end
 
   defp process_changes(changes) do
-    # Agregar mudanças para evitar spam
     offline_count = Enum.count(changes, &(&1.new_status == false))
     online_count = Enum.count(changes, &(&1.new_status == true))
 
-    # Se muitos reinos mudaram, enviar resumo agregado
     if length(changes) > 5 do
       send_aggregated_notification(offline_count, online_count, changes)
     else
-      # Enviar notificação individual para cada mudança
       Enum.each(changes, &send_individual_notification/1)
     end
 
-    # Registrar evento
     create_event("realm_status_changed", %{
       changes: changes,
       offline_count: offline_count,
@@ -143,14 +142,9 @@ defmodule RealmAgent.Monitor.StatusChecker do
   end
 
   defp send_aggregated_notification(offline_count, online_count, changes) do
-    title = "Mudanças de status"
-
-    body =
-      "#{length(changes)} reinos mudaram (#{offline_count} offline, #{online_count} online)"
-
     Notifier.send_status_change(%{
-      title: title,
-      body: body,
+      title: "Realm status changes",
+      body: "#{length(changes)} realms changed (#{offline_count} offline, #{online_count} online)",
       data: %{
         type: "aggregated",
         changes: changes
@@ -160,12 +154,10 @@ defmodule RealmAgent.Monitor.StatusChecker do
 
   defp send_individual_notification(%{name: name, new_status: new_status}) do
     status_text = if new_status, do: "ONLINE", else: "OFFLINE"
-    title = "Realm #{status_text}"
-    body = "#{name} ficou #{status_text} • Americas & Oceania"
 
     Notifier.send_status_change(%{
-      title: title,
-      body: body,
+      title: "Realm #{status_text}",
+      body: "#{name} is now #{status_text} • Americas & Oceania",
       data: %{
         type: "individual",
         realm_name: name,

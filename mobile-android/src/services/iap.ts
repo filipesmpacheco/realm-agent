@@ -1,94 +1,81 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  initConnection,
-  purchaseUpdatedListener,
-  purchaseErrorListener,
-  getProducts,
-  requestPurchase,
   finishTransaction,
-  PurchaseError,
+  getProducts,
+  initConnection,
+  purchaseErrorListener,
+  purchaseUpdatedListener,
+  requestPurchase,
+  type Purchase,
+  type PurchaseError,
 } from 'react-native-iap';
 
 const REMOVE_ADS_SKU = 'remove_ads';
 const PURCHASE_KEY = '@realm_agent:ads_removed';
 
 /**
- * Inicializa a conexão com a loja
+ * Initializes the in-app purchase connection with the platform store.
+ * Call once on app startup before any purchase operations.
  */
 export async function initIAP(): Promise<void> {
-  try {
-    await initConnection();
-    console.log('IAP connection initialized');
-  } catch (error) {
-    console.error('Error initializing IAP:', error);
-  }
+  await initConnection();
 }
 
 /**
- * Verifica se o usuário já comprou a remoção de anúncios
+ * Returns true if the user has already purchased the remove ads upgrade.
  */
 export async function checkPurchaseStatus(): Promise<boolean> {
   try {
     const value = await AsyncStorage.getItem(PURCHASE_KEY);
     return value === 'true';
-  } catch (error) {
-    console.error('Error checking purchase status:', error);
+  } catch {
     return false;
   }
 }
 
 /**
- * Marca a compra como concluída
+ * Persists the purchase completion status locally.
  */
 async function savePurchaseStatus(): Promise<void> {
   await AsyncStorage.setItem(PURCHASE_KEY, 'true');
 }
 
 /**
- * Compra a remoção de anúncios
+ * Initiates the remove ads purchase flow.
+ * Returns true if the purchase request was submitted successfully.
+ * The actual purchase result is delivered via the purchase listener.
  */
 export async function purchaseRemoveAds(): Promise<boolean> {
   try {
-    // Buscar produto
-    const products = await getProducts({skus: [REMOVE_ADS_SKU]});
+    const products = await getProducts({ skus: [REMOVE_ADS_SKU] });
     if (products.length === 0) {
       throw new Error('Product not found');
     }
 
-    // Solicitar compra
-    await requestPurchase({sku: REMOVE_ADS_SKU});
-
-    // O listener de compra irá processar o resultado
+    await requestPurchase({ sku: REMOVE_ADS_SKU });
     return true;
-  } catch (error) {
-    console.error('Error purchasing remove ads:', error);
+  } catch {
     return false;
   }
 }
 
 /**
- * Configura listeners para atualizações de compra
+ * Registers IAP purchase update and error listeners.
+ * Call once on app startup after initIAP().
  */
 export function setupPurchaseListeners(): void {
-  // Listener para compras bem-sucedidas
-  purchaseUpdatedListener(async purchase => {
+  purchaseUpdatedListener(async (purchase: Purchase) => {
     const receipt = purchase.transactionReceipt;
     if (receipt) {
       try {
-        // Salvar status da compra
         await savePurchaseStatus();
-        console.log('Purchase successful:', purchase);
-
-        // Finalizar transação
-        await finishTransaction({purchase});
-      } catch (error) {
-        console.error('Error finishing transaction:', error);
+        await finishTransaction({ purchase });
+      } catch {
+        // Transaction already finished or in invalid state
       }
     }
   });
 
-  // Listener para erros de compra
-  purchaseErrorListener((error: PurchaseError) => {
-    console.error('Purchase error:', error);
-  });
+  // User cancelled or payment failed — no action needed
+  purchaseErrorListener((_error: PurchaseError) => {});
 }

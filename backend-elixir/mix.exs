@@ -53,7 +53,9 @@ defmodule RealmAgent.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:oban, "~> 2.18"},
-      {:httpoison, "~> 2.2"}
+      {:httpoison, "~> 2.2"},
+      {:goth, "~> 1.4"},
+      {:castore, "~> 1.0"}
     ]
   end
 

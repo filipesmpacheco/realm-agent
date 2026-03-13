@@ -7,6 +7,8 @@ defmodule RealmAgentWeb.Router do
 
   scope "/api", RealmAgentWeb do
     pipe_through :api
+
+    get "/realms", RealmController, :index
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

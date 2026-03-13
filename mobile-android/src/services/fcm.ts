@@ -1,8 +1,11 @@
 import messaging from '@react-native-firebase/messaging';
-import {PermissionsAndroid, Platform} from 'react-native';
+import { PermissionsAndroid, Platform } from 'react-native';
+
+import type { MessageHandler, RemoteMessage } from '../types/notifications';
 
 /**
- * Solicita permissão para notificações (Android 13+)
+ * Requests notification permission.
+ * On Android 13+ uses the runtime permission API; on iOS uses Firebase Auth.
  */
 export async function requestPermission(): Promise<boolean> {
   if (Platform.OS === 'android' && Platform.Version >= 33) {
@@ -20,51 +23,46 @@ export async function requestPermission(): Promise<boolean> {
 }
 
 /**
- * Assina um tópico FCM
+ * Subscribes the device to an FCM topic.
  */
 export async function subscribeToTopic(topic: string): Promise<void> {
   await messaging().subscribeToTopic(topic);
-  console.log(`Subscribed to topic: ${topic}`);
 }
 
 /**
- * Desassina um tópico FCM
+ * Unsubscribes the device from an FCM topic.
  */
 export async function unsubscribeFromTopic(topic: string): Promise<void> {
   await messaging().unsubscribeFromTopic(topic);
-  console.log(`Unsubscribed from topic: ${topic}`);
 }
 
 /**
- * Obtém o token FCM do dispositivo
+ * Returns the FCM registration token for the current device.
  */
 export async function getFCMToken(): Promise<string> {
-  const token = await messaging().getToken();
-  console.log('FCM Token:', token);
-  return token;
+  return messaging().getToken();
 }
 
 /**
- * Configura listener para mensagens em foreground
+ * Registers a listener for messages received while the app is in the foreground.
+ * Returns an unsubscribe function.
  */
-export function onMessageReceived(
-  handler: (message: any) => void,
-): () => void {
+export function onMessageReceived(handler: MessageHandler): () => void {
   return messaging().onMessage(handler);
 }
 
 /**
- * Configura listener para quando o app é aberto via notificação
+ * Registers a listener for when the app is opened via a notification tap.
+ * Returns an unsubscribe function.
  */
-export function onNotificationOpenedApp(
-  handler: (message: any) => void,
-): () => void {
+export function onNotificationOpenedApp(handler: MessageHandler): () => void {
   return messaging().onNotificationOpenedApp(handler);
 }
 
 /**
- * Verifica se o app foi aberto via notificação (app estava fechado)
+ * Returns the notification that launched the app if it was opened from a closed state,
+ * or null otherwise.
  */
-export async function getInitialNotification(): Promise<any | null> {
-  return await messaging().getInitialNotification();
+export async function getInitialNotification(): Promise<RemoteMessage | null> {
+  return messaging().getInitialNotification();
 }

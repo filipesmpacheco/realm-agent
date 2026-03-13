@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "android": "react-native run-android",
-    "ios": "react-native run-ios",
+    "ios": "react-native run-ios --simulator 'iPhone 17 Pro Max'",
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest"
@@ -19,7 +19,7 @@
     "@react-native-firebase/app": "^21.8.0",
     "@react-native-firebase/messaging": "^21.8.0",
     "react-native-google-mobile-ads": "^15.5.0",
-    "react-native-iap": "^13.1.1",
+    "react-native-iap": "^12.15.0",
     "@react-native-async-storage/async-storage": "^2.1.0",
     "react-native-screens": "^4.5.0"
   },
