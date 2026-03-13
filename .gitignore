@@ -6,6 +6,8 @@ firebase-service-account.json
 # Firebase credentials (sensitive)
 firebase-service-account.json
 mobile-android/android/app/google-services.json
+mobile-android/ios/GoogleService-Info.plist
+mobile-android/ios/RealmAgent/GoogleService-Info.plist
 backend-node/firebase-service-account.json
 
 # Environment files with secrets
