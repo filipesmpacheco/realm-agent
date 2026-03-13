@@ -14,3 +14,6 @@ backend-node/firebase-service-account.json
 .env
 backend-elixir/.env
 backend-node/.env
+
+# Local docs (e.g. scratch/reference)
+docs/req.md
